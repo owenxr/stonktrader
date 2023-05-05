@@ -4,6 +4,8 @@ from datetime import datetime
 from pathlib import Path
 import pytz
 import csv
+from constants import STOCKS
+from constants import COLUMNS
 
 ################################################################################
 #                   Constant                                     
@@ -12,8 +14,7 @@ ARCHIVE = os.path.join(os.getcwd(), Path("data/archive"))
 ARCHIVE_LST = [os.path.join(ARCHIVE, "2020"), os.path.join(ARCHIVE, "2021"), \
                os.path.join(ARCHIVE, "2022"), os.path.join(ARCHIVE, "2023")]
 INTERDAY = os.path.join(os.getcwd(), Path("data/interday"))
-COLUMNS = ['TimeStamp', 'SPY', 'QQQ', 'IWM', 'AAPL', 'MSFT', 'NVDA', 'XLK', 'XLP', 'XLY', 'XTN', 'HYG']
-STOCKS = ['SPY', 'QQQ', 'IWM', 'AAPL', 'MSFT', 'NVDA', 'XLK', 'XLP', 'XLY', 'XTN', 'HYG']
+INTRADAY = os.path.join(os.getcwd(), Path("data/intraday"))
 
 # YYYY-MM-DD HH:MM:SS.FFF"
 datetime_fmt = "%Y-%m-%d %H:%M:%S.%f"
@@ -57,13 +58,30 @@ def parse_interday(df, week_num):
 ################################################################################
 #                   Parser Data into Intraday Data                                       
 ################################################################################
-def parse_intraday(df):
+def parse_intraday(df, week_num):
+  # Filter input dataframe by day of the week
   mon_csv = df.loc[df["TimeStamp"].dt.weekday == 0]
   tues_csv = df.loc[df["TimeStamp"].dt.weekday == 1]
   wed_csv = df.loc[df["TimeStamp"].dt.weekday == 2]
   thurs_csv = df.loc[df["TimeStamp"].dt.weekday == 3]
   fri_csv = df.loc[df["TimeStamp"].dt.weekday == 4]
 
+  # Keep only data points at every 90-minute interval for each day
+  mon_csv = mon_csv.set_index("TimeStamp").resample("90T").last().reset_index()
+  tues_csv = tues_csv.set_index("TimeStamp").resample("90T").last().reset_index()
+  wed_csv = wed_csv.set_index("TimeStamp").resample("90T").last().reset_index()
+  thurs_csv = thurs_csv.set_index("TimeStamp").resample("90T").last().reset_index()
+  fri_csv = fri_csv.set_index("TimeStamp").resample("90T").last().reset_index()
+  
+  day_dfs = [mon_csv, tues_csv, wed_csv, thurs_csv, fri_csv]
+
+  decr = 0
+  for i in range(len(day_dfs)):
+    if day_dfs[i].empty == True:
+      decr += 1
+      continue
+
+    day_dfs[i].to_csv(os.path.join(INTRADAY, f'day{week_num * 5 + i + 1 - decr}.csv'))
 
 ################################################################################
 ################################################################################
@@ -115,4 +133,5 @@ for folder in ARCHIVE_LST:
 
       if filtered_csv.empty == False:
         parse_interday(filtered_csv, week)
+        parse_intraday(filtered_csv, week)
         week += 1
